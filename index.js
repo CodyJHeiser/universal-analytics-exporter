@@ -7,7 +7,7 @@ const uaRequest = new UniversalAnalyticsRequest(token);
 
 async function processData() {
     try {
-        const response = await uaRequest.requestAnalytics("2023-01-01", "2023-01-10");
+        const response = await uaRequest.requestAnalytics("2023-01-01", "2023-02-10");
 
         if (!response) return;
         uaRequest.writeToFile(response);

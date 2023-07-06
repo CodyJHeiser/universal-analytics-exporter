@@ -62,39 +62,53 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
      * @async
      * @param {string} startDate - The start date in 'YYYY-MM-DD' format.
      * @param {string} endDate - The end date in 'YYYY-MM-DD' format.
-     * @return {Promise<Object|null>} The analytics data or null if an error occurred.
+     * @param {string} [url=null] - The url to send the request to. If not provided, the default url is used.
+     * @return {Promise<Array|null>} The analytics data or null if an error occurred.
      */
-    requestAnalytics = async (startDate, endDate) => {
+    requestAnalytics = async (startDate, endDate, url = null) => {
         if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
             console.error('Invalid date format. Dates should be in YYYY-MM-DD format.');
             return null;
         }
 
-        // Set the date values for the URL
-        this.gAuthUrlBody["start-date"] = startDate;
-        this.gAuthUrlBody["end-date"] = endDate;
+        if (!url) {
+            // Set the date values for the URL
+            this.gAuthUrlBody["start-date"] = startDate;
+            this.gAuthUrlBody["end-date"] = endDate;
 
-        // Convert your object to a query string
-        const urlParams = querystring.stringify(this.gAuthUrlBody);
+            // Convert your object to a query string
+            const urlParams = querystring.stringify(this.gAuthUrlBody);
 
-        // Set the config
-        const url = `${this.gAuthUrl}?${urlParams}`;
+            // Set the config
+            url = `${this.gAuthUrl}?${urlParams}`;
 
-        if (!this.isValidUrl(url)) {
-            console.error('Invalid URL.');
-            return null;
+            if (!this.isValidUrl(url)) {
+                console.error('Invalid URL.');
+                return null;
+            }
         }
 
         this.config.url = url;
 
         try {
             const { data } = await axios.request(this.config);
+
+            // If there's a next page, fetch it recursively and merge it with the current data.
+            if (data.nextLink && data.nextLink !== data.selfLink) {
+                await this.delay(1000);
+                const nextPageData = await this.requestAnalytics(startDate, endDate, data.nextLink);
+                if (nextPageData) {
+                    // Merge rows from nextPageData to data.
+                    data.rows = data.rows.concat(nextPageData.rows);
+                }
+            }
+
             return data;
         } catch (error) {
             const { response } = error;
             // Log the error
-            console.error("modules/requestAnalytics Error: ", response.statusText);
             this.logToFile(response);
+            console.error("modules/requestAnalytics Error: ", response.statusText);
 
             // Attempt to refresh auth token
             const refreshDate = await this.refreshAuth();
@@ -111,6 +125,11 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             this.logToFile(successMessage);
             return null;
         }
+    };
+
+    // Helper function to add delay
+    delay = (ms) => {
+        return new Promise(resolve => setTimeout(resolve, ms));
     };
 
     /**
