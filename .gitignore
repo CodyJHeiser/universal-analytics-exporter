@@ -1,2 +1,4 @@
 # Environment Vars
 .env
+
+node_modules
