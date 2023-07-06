@@ -1,4 +1,5 @@
 import RefreshGoogleToken from "./RefreshGoogleToken.js";
+import * as ProgressBar from 'cli-progress';
 import querystring from 'querystring';
 import axios from "axios";
 import fs from "fs";
@@ -55,6 +56,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 'Authorization': `Bearer ${gAuthToken}`
             }
         };
+
+        this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
+        this.progressStarted = false;
     }
 
     /**
@@ -93,18 +97,35 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
         try {
             const { data } = await axios.request(this.config);
 
+            const { totalResults, itemsPerPage } = data;
+            const totalPages = Math.ceil(totalResults / itemsPerPage);
+
+            if (!this.progressStarted) {
+                // Start the progress bar
+                this.progressBar.start(totalPages, 0);
+            }
+
             // If there's a next page, fetch it recursively and merge it with the current data.
             if (data.nextLink && data.nextLink !== data.selfLink) {
                 await this.delay(1000);
+
                 const nextPageData = await this.requestAnalytics(startDate, endDate, data.nextLink);
                 if (nextPageData) {
                     // Merge rows from nextPageData to data.
                     data.rows = data.rows.concat(nextPageData.rows);
                 }
+
             }
+
+            // Stop the progress bar
+            this.progressBar.increment();
+            this.progressBar.stop();
 
             return data;
         } catch (error) {
+            // Stop the progress bar if there is an error
+            this.progressBar.stop();
+
             const { response } = error;
             // Log the error
             this.logToFile(response);
@@ -129,6 +150,10 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
     // Helper function to add delay
     delay = (ms) => {
+        // Increment the progress bar
+        this.progressBar.increment();
+        this.progressStarted = true;
+
         return new Promise(resolve => setTimeout(resolve, ms));
     };
 
