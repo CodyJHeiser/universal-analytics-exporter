@@ -4,7 +4,15 @@ import fs from "fs";
 import os from "os";
 import querystring from 'querystring';
 
+/**
+ * Class to refresh the Google Authentication Token
+ * @class
+ */
 class RefreshGoogleToken {
+    /**
+     * Constructor for RefreshGoogleToken class
+     * @constructor
+     */
     constructor() {
         // Get .env variables
         const GAUTH_CLIENT_ID = process.env.GAUTH_CLIENT_ID;
@@ -23,6 +31,12 @@ class RefreshGoogleToken {
         };
     }
 
+    /**
+     * Refreshes the auth token
+     * @async
+     * @method
+     * @returns {Promise<number|null>} The new expiry time of the auth token or null if an error occurred
+     */
     refreshAuth = async () => {
         try {
             const response = await axios.post('https://www.googleapis.com/oauth2/v4/token', querystring.stringify(this.gAuthConfig), {
@@ -42,6 +56,13 @@ class RefreshGoogleToken {
         }
     };
 
+    /**
+     * Sets a new value for a given key in the .env file
+     * @async
+     * @method
+     * @param {string} key - The key to update
+     * @param {string} value - The new value
+     */
     setEnvValue = async (key, value) => {
         // read file from hdd & split it from a linebreak to a array
         const ENV_VARS = fs.readFileSync("./.env", "utf8").split(os.EOL);

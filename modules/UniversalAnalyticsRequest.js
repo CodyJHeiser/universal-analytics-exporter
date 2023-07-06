@@ -92,15 +92,21 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             return data;
         } catch (error) {
             const { response } = error;
-            console.error("modules/requestAnalytics Error: ", response.statusText);
-
             // Log the error
+            console.error("modules/requestAnalytics Error: ", response.statusText);
             this.logToFile(response);
 
             // Attempt to refresh auth token
-            await this.refreshAuth();
+            const refreshDate = await this.refreshAuth();
 
-            const successMessage = "Token refreshed, please run the program again.";
+            if (!refreshDate) {
+                const errorMessage = "modules/requestAnalytics Failed to refresh the token.";
+                console.error(errorMessage);
+                this.logToFile(errorMessage);
+            }
+
+            // Refresh returns no error;
+            const successMessage = `Token refreshed, please run the program again. New expiry: ${String(refreshDate)}`;
             console.log(successMessage);
             this.logToFile(successMessage);
             return null;
@@ -250,9 +256,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 message = JSON.stringify(message, null, 2);
             } catch {
                 message = JSON.stringify({
-                    status: error.response && error.response.status,
-                    statusText: error.response && error.response.statusText,
-                    data: error.response && error.response.data
+                    status: message.response && message.response.status,
+                    statusText: message.response && message.response.statusText,
+                    data: message.response && message.response.data
                 }, null, 2);
             }
         }
