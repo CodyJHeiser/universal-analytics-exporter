@@ -6,3 +6,6 @@ node_modules
 # Logs
 logs.*
 .env-example
+
+# Google API data
+google-cloud-key-file.json

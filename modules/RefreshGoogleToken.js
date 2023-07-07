@@ -39,17 +39,18 @@ class RefreshGoogleToken {
      */
     refreshAuth = async () => {
         try {
-            const response = await axios.post('https://www.googleapis.com/oauth2/v4/token', querystring.stringify(this.gAuthConfig), {
+            const { data: { expires_in, access_token } } = await axios.post('https://www.googleapis.com/oauth2/v4/token', querystring.stringify(this.gAuthConfig), {
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded"
                 }
             });
-            console.log(`gAuth New Token Expiry: ${response.data.expires_in}`);
+
+            console.log(`gAuth New Token Expiry: ${expires_in}`);
 
             // Update the .env file
-            await this.setEnvValue(this.gAuthEnv, response.data.access_token);
+            await this.setEnvValue(this.gAuthEnv, access_token);
 
-            return response.data.expires_in;
+            return { expires_in, access_token };
         } catch (error) {
             console.error("refreshAuth Error: ", error);
             return null;

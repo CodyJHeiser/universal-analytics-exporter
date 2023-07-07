@@ -59,7 +59,6 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
         this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
         this.progressStarted = false;
-        this.hasNextLinkSaved = false;
         this.currentPageNumber = 0;
     }
 
@@ -113,22 +112,50 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
                 const nextPageData = await this.requestAnalytics(startDate, endDate, data.nextLink);
                 if (nextPageData) {
-                    // Save status to prototype incase auth token expires and increment page number for naming
-                    this.hasNextLinkSaved = true;
-                    this.currentPageNumber += 1;
+                    // Get current and new column headers, ignore blank, null, or spaces-only headers
+                    const currentColumnHeaders = data.columnHeaders.reduce((a, c) => {
+                        if (c.name && c.name.trim()) {
+                            return [...a, c.name];
+                        } else {
+                            return a;
+                        }
+                    }, []);
 
-                    // Save each page to exports/pages
-                    const tsvPath = `exports/pages/google_ua_request-${this.currentPageNumber}.tsv`;
-                    const jsonPath = `exports/pages/google_ua_request_all-${this.currentPageNumber}.json`;
+                    const newColumnHeaders = nextPageData.columnHeaders.reduce((a, c) => {
+                        if (c.name && c.name.trim()) {
+                            return [...a, c.name];
+                        } else {
+                            return a;
+                        }
+                    }, []);
 
-                    this.writeToFile(data, tsvPath, jsonPath);
+                    // Append column headers if missing
+                    newColumnHeaders.forEach(header => {
+                        if (!(currentColumnHeaders.includes(header))) {
+                            // Get full value of header data
+                            const fullData = nextPageData.columnHeaders.filter(next => next.name === header)[0];
 
-                    // Merge rows from nextPageData to data.
-                    data.rows = data.rows.concat(nextPageData.rows);
-                } else {
-                    this.hasNextLinkSaved = false;
+                            // Append header values to the end of the data
+                            data.columnHeaders.push(fullData);
+                        }
+                    });
+
+                    const expectedLength = data.columnHeaders.length;
+
+                    // Merge rows from nextPageData to data, not more than the headers
+                    const nonValidRows = data.rows.concat(nextPageData.rows);
+                    const validatedRows = nonValidRows.map(row => row.map(deepRow => deepRow.slice(0, expectedLength)));
+                    data.rows = validatedRows;
                 }
             }
+
+            // Save each page to exports/pages
+            this.currentPageNumber += 1;
+
+            const tsvPath = `exports/pages/google_ua_request-${this.currentPageNumber}.tsv`;
+            const jsonPath = `exports/pages/google_ua_request_all-${this.currentPageNumber}.json`;
+
+            this.writeToFile(data, tsvPath, jsonPath);
 
             // Increment the progress bar for the last run
             this.progressBar.increment();
@@ -145,9 +172,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 console.error("modules/requestAnalytics Error: ", response.statusText);
 
                 // Attempt to refresh auth token
-                const refreshDate = await this.refreshAuth();
+                const { expires_in, access_token } = await this.refreshAuth();
 
-                if (!refreshDate) {
+                if (!expires_in || !access_token) {
                     const errorMessage = "modules/requestAnalytics Failed to refresh the token.";
 
                     // Stop the progress bar if there is an error
@@ -158,11 +185,15 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 }
 
                 // Refresh returns no error;
-                const successMessage = `Token refreshed, attempting to continue. New expiry: ${String(refreshDate)}`;
+                const successMessage = `Token refreshed, attempting to continue. New expiry: ${String(expires_in)}`;
                 console.log(successMessage);
                 this.logToFile(successMessage);
 
+                // Reset the token value
+                this.gAuthToken = access_token;
+
                 // Attempt to continue
+                await this.delay(2000);
                 return this.requestAnalytics(startDate, endDate, url, retries - 1);
             } else {
                 throw new Error('Failed after several retries');
@@ -230,10 +261,10 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
     };
 
     /**
- * Writes the given data object to a file in JSON format.
- * @param {Object} json - The data to write.
- * @param {string} jsonWritePath - The path to write the JSON file.
- */
+     * Writes the given data object to a file in JSON format.
+     * @param {Object} json - The data to write.
+     * @param {string} jsonWritePath - The path to write the JSON file.
+     */
     writeJsonToFile = (json, jsonWritePath) => {
         try {
             fs.writeFileSync(jsonWritePath, JSON.stringify(json, null, '\t'));
@@ -309,6 +340,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
         }
 
         this.logWriteResults(success, failed);
+
+        // Return file names
+        return { tsv: tsvWritePath, json: jsonWritePath };
     };
 
     /**
