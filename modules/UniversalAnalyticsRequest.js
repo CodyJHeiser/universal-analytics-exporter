@@ -59,6 +59,8 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
         this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
         this.progressStarted = false;
+        this.hasNextLinkSaved = false;
+        this.currentPageNumber = 0;
     }
 
     /**
@@ -69,7 +71,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
      * @param {string} [url=null] - The url to send the request to. If not provided, the default url is used.
      * @return {Promise<Array|null>} The analytics data or null if an error occurred.
      */
-    requestAnalytics = async (startDate, endDate, url = null) => {
+    requestAnalytics = async (startDate, endDate, url = null, retries = 2) => {
         if (!this.isValidDate(startDate) || !this.isValidDate(endDate)) {
             console.error('Invalid date format. Dates should be in YYYY-MM-DD format.');
             return null;
@@ -111,40 +113,60 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
                 const nextPageData = await this.requestAnalytics(startDate, endDate, data.nextLink);
                 if (nextPageData) {
+                    // Save status to prototype incase auth token expires and increment page number for naming
+                    this.hasNextLinkSaved = true;
+                    this.currentPageNumber += 1;
+
+                    // Save each page to exports/pages
+                    const tsvPath = `exports/pages/google_ua_request-${this.currentPageNumber}.tsv`;
+                    const jsonPath = `exports/pages/google_ua_request_all-${this.currentPageNumber}.json`;
+
+                    this.writeToFile(data, tsvPath, jsonPath);
+
                     // Merge rows from nextPageData to data.
                     data.rows = data.rows.concat(nextPageData.rows);
+                } else {
+                    this.hasNextLinkSaved = false;
                 }
-
             }
 
-            // Stop the progress bar
+            // Increment the progress bar for the last run
             this.progressBar.increment();
+
+            // Stop the progress bar
             this.progressBar.stop();
 
             return data;
         } catch (error) {
-            // Stop the progress bar if there is an error
-            this.progressBar.stop();
+            if (retries > 0) {
+                // Log the error
+                const { response } = error;
+                this.logToFile(response);
+                console.error("modules/requestAnalytics Error: ", response.statusText);
 
-            const { response } = error;
-            // Log the error
-            this.logToFile(response);
-            console.error("modules/requestAnalytics Error: ", response.statusText);
+                // Attempt to refresh auth token
+                const refreshDate = await this.refreshAuth();
 
-            // Attempt to refresh auth token
-            const refreshDate = await this.refreshAuth();
+                if (!refreshDate) {
+                    const errorMessage = "modules/requestAnalytics Failed to refresh the token.";
 
-            if (!refreshDate) {
-                const errorMessage = "modules/requestAnalytics Failed to refresh the token.";
-                console.error(errorMessage);
-                this.logToFile(errorMessage);
+                    // Stop the progress bar if there is an error
+                    this.progressBar.stop();
+
+                    this.logToFile(errorMessage);
+                    throw new Error(errorMessage);
+                }
+
+                // Refresh returns no error;
+                const successMessage = `Token refreshed, attempting to continue. New expiry: ${String(refreshDate)}`;
+                console.log(successMessage);
+                this.logToFile(successMessage);
+
+                // Attempt to continue
+                return this.requestAnalytics(startDate, endDate, url, retries - 1);
+            } else {
+                throw new Error('Failed after several retries');
             }
-
-            // Refresh returns no error;
-            const successMessage = `Token refreshed, please run the program again. New expiry: ${String(refreshDate)}`;
-            console.log(successMessage);
-            this.logToFile(successMessage);
-            return null;
         }
     };
 
