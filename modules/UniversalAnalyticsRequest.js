@@ -50,8 +50,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
         // Set the config details for the UA API request
         this.config = this.getConfigHeaders(gAuthToken);
 
-        this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
-        this.progressStarted = false;
+        this.progressBar = null;
         this.currentPageNumber = 0;
     }
 
@@ -110,7 +109,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             const { totalResults, itemsPerPage } = data;
             const totalPages = Math.ceil(totalResults / itemsPerPage);
 
-            if (!this.progressStarted) {
+            if (!this.progressBar) {
+                this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
+
                 // Start the progress bar
                 this.progressBar.start(totalPages, 0);
             }
@@ -118,6 +119,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             // If there's a next page, fetch it recursively and merge it with the current data.
             if (data.nextLink && data.nextLink !== data.selfLink) {
                 await this.delay(1000);
+
+                // Increment the progress bar for the last run
+                this.progressBar.increment();
 
                 const nextPageData = await this.requestAnalytics(startDate, endDate, data.nextLink);
                 if (nextPageData) {
@@ -156,6 +160,9 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                     const validatedRows = nonValidRows.map(row => row.map(deepRow => deepRow.slice(0, expectedLength)));
                     data.rows = validatedRows;
                 }
+            } else {
+                // Increment the progress bar for the last run
+                this.progressBar.increment();
             }
 
             // Save each page to exports/pages
@@ -166,11 +173,10 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
             this.writeToFile(data, tsvPath, jsonPath);
 
-            // Increment the progress bar for the last run
-            this.progressBar.increment();
-
-            // Stop the progress bar
-            this.progressBar.stop();
+            if (this.currentPageNumber === totalPages) {
+                // Stop the progress bar
+                this.progressBar.stop();
+            }
 
             return data;
         } catch (error) {
@@ -202,7 +208,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 // Reset the token value
                 this.config = this.getConfigHeaders(access_token);
 
-                // Attempt to continue
+                // Attempt to continue without setting the progress bar
                 await this.delay(2000, false);
                 return this.requestAnalytics(startDate, endDate, url, retries - 1);
             } else {
@@ -215,8 +221,8 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
     delay = (ms, progressBarIncrement = true) => {
         // Increment the progress bar
         if (progressBarIncrement) {
-            this.progressBar.increment();
-            this.progressStarted = true;
+            // this.progressBar.increment();
+            // this.progressStarted = true;
         }
 
         return new Promise(resolve => setTimeout(resolve, ms));
@@ -322,7 +328,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
         const message = `Wrote ${successLength} file${successLength > 1 ? 's' : ''} [${successJoin}]. ${successLength} passed, ${failedLength} failed${failedLength > 0 ? ` [${failedJoin}]` : ""}.`;
 
-        console.log(message);
+        // console.log(message);
         this.logToFile(message);
     };
 
