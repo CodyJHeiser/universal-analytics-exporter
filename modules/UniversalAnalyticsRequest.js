@@ -48,7 +48,20 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
         this.logFilePath = "logs.txt";
 
         // Set the config details for the UA API request
-        this.config = {
+        this.config = this.getConfigHeaders(gAuthToken);
+
+        this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
+        this.progressStarted = false;
+        this.currentPageNumber = 0;
+    }
+
+    /**
+     * Update the headers to get the google authentication token.
+     * @param {string} gAuthToken - The Google Authorization Token.
+     * @returns {Object} The object header API data with the authorization token.
+     */
+    getConfigHeaders = (gAuthToken) => {
+        return {
             method: 'get',
             maxBodyLength: Infinity,
             url: null,
@@ -56,11 +69,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 'Authorization': `Bearer ${gAuthToken}`
             }
         };
-
-        this.progressBar = new ProgressBar.SingleBar({}, ProgressBar.Presets.shades_classic);
-        this.progressStarted = false;
-        this.currentPageNumber = 0;
-    }
+    };
 
     /**
      * Requests analytics data from Google Analytics API for given dates.
@@ -176,6 +185,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
 
                 if (!expires_in || !access_token) {
                     const errorMessage = "modules/requestAnalytics Failed to refresh the token.";
+                    console.error(errorMessage);
 
                     // Stop the progress bar if there is an error
                     this.progressBar.stop();
@@ -190,10 +200,10 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 this.logToFile(successMessage);
 
                 // Reset the token value
-                this.gAuthToken = access_token;
+                this.config = this.getConfigHeaders(access_token);
 
                 // Attempt to continue
-                await this.delay(2000);
+                await this.delay(2000, false);
                 return this.requestAnalytics(startDate, endDate, url, retries - 1);
             } else {
                 throw new Error('Failed after several retries');
@@ -202,10 +212,12 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
     };
 
     // Helper function to add delay
-    delay = (ms) => {
+    delay = (ms, progressBarIncrement = true) => {
         // Increment the progress bar
-        this.progressBar.increment();
-        this.progressStarted = true;
+        if (progressBarIncrement) {
+            this.progressBar.increment();
+            this.progressStarted = true;
+        }
 
         return new Promise(resolve => setTimeout(resolve, ms));
     };
