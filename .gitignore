@@ -8,4 +8,4 @@ logs.*
 .env-example
 
 # Google API data
-google-cloud-key-file.json
+google-cloud-key.json
