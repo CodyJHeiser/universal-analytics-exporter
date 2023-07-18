@@ -15,7 +15,7 @@ const performanceBody = {
 // metrics=ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks
 
 const productRptGeo = {
-    dimensions: "ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:productName,ga:date",
+    dimensions: "ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:productName,ga:date,ga:productSku",
     metrics: "ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks"
 };
 
@@ -23,7 +23,7 @@ const productRptGeo = {
 // metrics=ga:users,ga:sessions,ga:bounces,ga:goalCompletionsAll,ga:goalValueAll,ga:pageviews
 
 const productRptNoGeo = {
-    dimensions: "ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:date",
+    dimensions: "ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:date,ga:productSku",
     metrics: "ga:users,ga:sessions,ga:bounces,ga:goalCompletionsAll,ga:goalValueAll,ga:pageviews"
 };
 
@@ -41,8 +41,11 @@ async function processData(requestObj, tableName = "ua_data") {
         const filePath = requestObj.writeToFile(response);
         console.log("Google UA Data Written to TSV.");
 
+        // Save csv files by year
+        await requestObj.writeCsvByYear(filePath.tsv);
+
         // Upload the data to big query via NPM package
-        manager.loadToBigQuery('google_ua_analysis', tableName, 'ua-uploads', filePath.tsv);
+        // manager.loadToBigQuery('google_ua_analysis', tableName, 'ua-uploads', filePath.tsv);
     } catch (error) {
         // handle the error
         console.log("Failed to process data: ", error);

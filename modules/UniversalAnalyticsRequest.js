@@ -4,6 +4,12 @@ import querystring from 'querystring';
 import axios from "axios";
 import fs from "fs";
 
+import path from 'path';
+import moment from 'moment';
+
+import { createObjectCsvWriter as createCsvWriter } from 'csv-writer';
+import csv from 'csv-parser';
+
 /**
  * This class is used for handling requests to the Google Analytics API.
  * @extends {RefreshGoogleToken}
@@ -332,6 +338,43 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             return false;
         }
     };
+
+    /**
+     * Reads data from a TSV file, groups data by year, and writes each group to a separate CSV file.
+     * @param {string} tsvFilePath - The path of the TSV file.
+     */
+    async writeCsvByYear(tsvFilePath) {
+        // Read data from TSV file
+        const data = [];
+        fs.createReadStream(tsvFilePath)
+            .pipe(csv({
+                separator: '\t'
+            }))
+            .on('data', (row) => {
+                data.push(row);
+            })
+            .on('end', () => {
+                // Group data by year
+                const groupedData = data.reduce((groups, row) => {
+                    const year = moment(row['ga:date'], 'YYYYMMDD').year();
+                    if (!groups[year]) groups[year] = [];
+                    groups[year].push(row);
+                    return groups;
+                }, {});
+
+                // Write each group to a separate CSV file
+                for (const year in groupedData) {
+                    const csvWriter = createCsvWriter({
+                        path: `./exports/csv/${year}.csv`,
+                        header: Object.keys(data[0]).map(header => ({ id: header, title: header })),
+                    });
+
+                    csvWriter.writeRecords(groupedData[year])
+                        .then(() => console.log(`Data written to /exports/csv/${year}.csv`))
+                        .catch((error) => console.error(`Failed to write data to /exports/csv/${year}.csv`, error));
+                }
+            });
+    }
 
     /**
      * Logs the results of the file write operations.
