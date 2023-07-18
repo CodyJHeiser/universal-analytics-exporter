@@ -29,17 +29,31 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
      * @property {Object} config.headers - The headers to be sent with the request.
      * @property {string} config.headers.Authorization - The Authorization header, including the Bearer token.
      */
-    constructor(gAuthToken) {
+    constructor(gAuthToken, modifiedUrlBody = {}) {
         super();
 
         // Default request data
         this.gAuthUrl = "https://www.googleapis.com/analytics/v3/data/ga";
+
+        // ids=ga:146624
+        // dimensions=ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:productName,ga:date
+        // metrics=ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks
+        // start-date=2023-01-01
+        // end-date=2023-01-10
+
+        // ids=ga:146624
+        // dimensions=ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:productName,ga:date
+        // metrics=ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks
+        // start-date=2023-01-01
+        // end-date=2023-01-10
+
         this.gAuthUrlBody = {
             ids: "ga:146624",
-            dimensions: "ga:campaign,ga:sourceMedium,ga:country,ga:region,ga:city,ga:productName,ga:date",
-            metrics: "ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks",
+            dimensions: "ga:campaign,ga:sourceMedium,ga:keyword,ga:productSku,ga:country,ga:region,ga:city,ga:productName,ga:date",
+            metrics: "ga:itemQuantity,ga:itemRevenue,ga:localItemRevenue,ga:localProductRefundAmount,ga:productAddsToCart,ga:productDetailViews,ga:productListClicks,ga:users",
+            ...modifiedUrlBody,
             "start-date": null,
-            "end-date": null //2023-01-01
+            "end-date": null,
         };
 
         // Set the default write path for the TSV file
@@ -90,10 +104,14 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
             this.gAuthUrlBody["end-date"] = endDate;
 
             // Convert your object to a query string
+            console.log("Gauth: ", this.gAuthUrlBody);
             const urlParams = querystring.stringify(this.gAuthUrlBody);
+            console.log("Urlparams: ", urlParams);
 
             // Set the config
             url = `${this.gAuthUrl}?${urlParams}`;
+            console.log(url);
+            this.logToFile(url);
 
             if (!this.isValidUrl(url)) {
                 console.error('Invalid URL.');
@@ -184,6 +202,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                 // Log the error
                 const { response } = error;
                 this.logToFile(response);
+                this.logToFile(error);
                 console.error("modules/requestAnalytics Error: ", response.statusText);
 
                 // Attempt to refresh auth token
@@ -197,6 +216,7 @@ class UniversalAnalyticsRequest extends RefreshGoogleToken {
                     this.progressBar.stop();
 
                     this.logToFile(errorMessage);
+                    this.logToFile(error);
                     throw new Error(errorMessage);
                 }
 
